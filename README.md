@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Viziguide - Multimodal AI Laptop Hardware & Software Diagnostics
 
 An AI-powered diagnostic backend for diagnosing laptop hardware and software problems using uploaded photos and diagnostic videos. Powered by **FastAPI**, **OpenCV**, and **Google Gemini 1.5 Pro**.
@@ -177,3 +178,7 @@ print(response.json())
 - **Color Correction**: Automatically converts OpenCV's default BGR color space to RGB before passing PIL Image instances to the Gemini SDK.
 - **Resource Cleanup**: Uses temporary files with atomic deletion in a `finally` block to prevent disk bloat.
 
+=======
+# Viziguide
+Avinya Pitch IT! competition: Team Zypher
+>>>>>>> 1e55c687ee5acfceb2e39d6cd35ce04af2da150f
