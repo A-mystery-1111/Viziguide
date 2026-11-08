@@ -721,6 +721,8 @@ function setupModals() {
   });
 }
 
+const GITHUB_REPO_URL = "https://github.com/A-mystery-1111/Viziguide";
+
 /* --------------------------------------------------------------------------
    10. Share Handlers (WhatsApp, Bluetooth / Nearby Share, Native Sheet, Email)
    -------------------------------------------------------------------------- */
@@ -739,12 +741,14 @@ function generateShareText() {
     rootCause = lines[0] || rootCause;
   }
 
+  const shareUrl = getWebsiteShareUrl();
+
   return (
     `🔧 *Viziguide AI Diagnostic Report*\n` +
-    `📱 Device: ${device}\n` +
-    `🎯 Confidence: ${conf} | Risk: ${risk}\n` +
-    `💡 Likely Root Cause: ${rootCause}\n\n` +
-    `View complete step-by-step fix and safety warnings on Viziguide.`
+    `📱 *Device:* ${device}\n` +
+    `🎯 *Confidence:* ${conf} | *Risk:* ${risk}\n` +
+    `💡 *Likely Root Cause:* ${rootCause}\n\n` +
+    `🔗 *View Full Report:* ${shareUrl}`
   );
 }
 
@@ -768,16 +772,6 @@ function openShareModal() {
 
   const shareText = generateShareText();
   shareSummaryInput.value = shareText;
-
-  const currentUrl = getWebsiteShareUrl();
-  const shareReportClickableLink = document.getElementById("shareReportClickableLink");
-  const shareReportClickableText = document.getElementById("shareReportClickableText");
-  if (shareReportClickableLink) {
-    shareReportClickableLink.href = currentUrl;
-  }
-  if (shareReportClickableText) {
-    shareReportClickableText.textContent = currentUrl;
-  }
 
   shareModal.style.display = "flex";
 }
@@ -916,18 +910,27 @@ function setupShareHandlers() {
    11. Website Sharing Handlers (WhatsApp, Bluetooth / Nearby Share, Native Sheet, Email)
    -------------------------------------------------------------------------- */
 function getWebsiteShareUrl() {
-  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+  const hostname = window.location.hostname;
+  // If running on a public domain/deployment, share that URL
+  if (
+    hostname &&
+    hostname !== "127.0.0.1" &&
+    hostname !== "localhost" &&
+    !hostname.startsWith("192.168.") &&
+    !hostname.startsWith("10.")
+  ) {
     return window.location.origin;
   }
-  return "http://localhost:8000";
+  // If running locally, return the live GitHub repository URL so WhatsApp and other apps render a 100% clickable link!
+  return GITHUB_REPO_URL;
 }
 
 function getWebsiteShareText() {
-  const url = getWebsiteShareUrl();
+  const shareUrl = getWebsiteShareUrl();
   return (
-    `⚡ Check out Viziguide — Multimodal AI Hardware & Appliance Diagnostics!\n\n` +
-    `Diagnose laptop, ceiling fan, washing machine, mixer, and router problems instantly from uploaded photos and videos with verified step-by-step fix guides.\n\n` +
-    `Try it here: ${url}`
+    `⚡ *Check out Viziguide — Multimodal AI Hardware & Appliance Diagnostics!*\n\n` +
+    `Diagnose laptop, ceiling fan, washing machine, mixer, and router problems instantly from uploaded photos & videos with verified step-by-step fix guides.\n\n` +
+    `🔗 *Open Link:* ${shareUrl}`
   );
 }
 
@@ -935,14 +938,6 @@ function openShareWebsiteModal() {
   const url = getWebsiteShareUrl();
   if (shareWebsiteUrlInput) {
     shareWebsiteUrlInput.value = url;
-  }
-  const shareWebsiteClickableLink = document.getElementById("shareWebsiteClickableLink");
-  const shareWebsiteClickableText = document.getElementById("shareWebsiteClickableText");
-  if (shareWebsiteClickableLink) {
-    shareWebsiteClickableLink.href = url;
-  }
-  if (shareWebsiteClickableText) {
-    shareWebsiteClickableText.textContent = url;
   }
   if (shareWebsiteModal) {
     shareWebsiteModal.style.display = "flex";

@@ -1514,41 +1514,6 @@ body {
   outline: none;
 }
 
-.clickable-link-container {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  padding: 0.55rem 0.85rem;
-  background-color: var(--primary-light);
-  border: 1px solid var(--primary-border);
-  border-radius: var(--radius-md);
-  font-size: 0.825rem;
-}
-
-.clickable-link-label {
-  font-weight: 700;
-  color: var(--primary);
-  flex-shrink: 0;
-}
-
-.live-hyperlink {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--primary);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  word-break: break-all;
-  transition: color 0.15s ease;
-}
-
-.live-hyperlink:hover {
-  color: var(--primary-hover);
-  text-decoration: underline;
-}
-
 /* Print Stylesheet */
 @media print {
   body {
