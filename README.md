@@ -1,22 +1,48 @@
-<<<<<<< HEAD
-# Viziguide - Multimodal AI Laptop Hardware & Software Diagnostics
+# Viziguide — Multimodal AI Hardware & Appliance Diagnostics
 
-An AI-powered diagnostic backend for diagnosing laptop hardware and software problems using uploaded photos and diagnostic videos. Powered by **FastAPI**, **OpenCV**, and **Google Gemini 1.5 Pro**.
+> **Practical AI Hardware Diagnosis**: Pretrained Vision-Language Models (Gemini 1.5 Pro) + Verified Service Manuals (RAG) + OpenCV 1 FPS Dynamic Frame Extraction + Safety Guardrails + Continuous Improvement Feedback Loop.
+
+---
+
+## 💡 The Viziguide Methodology
+
+Most of Viziguide **does not require training a model from scratch**. Training from scratch requires massive data and compute. The practical, production-grade approach implemented here is:
+
+| Feature | Approach | Training Needed? |
+|---|---|---|
+| **Identify product from photo** | Pretrained Vision-Language Model (Gemini 1.5 Pro) | Optional |
+| **Detect specific fault** (cracked screen, leaking gasket, stripped coupler) | Gemini Vision + Fine-tuned classifier/detector (EfficientNet / YOLO) | Yes (for specialized edge cases) |
+| **Turn manuals into simple steps** | RAG (Retrieval over official manufacturer manuals) + LLM | **No** (Core RAG Pipeline) |
+| **Interactive troubleshooting** | Technician System Prompt + RAG | **No** |
+| **Safety & Risk Guardrails** | Confidence thresholds & High-risk professional escalation | **No** (Rules & Guardrails) |
 
 ---
 
 ## 🚀 Key Features
 
-- **Multimodal Analysis**: Accepts single or multiple images (photos of motherboards, ports, screens, chassis), diagnostic videos, and user-provided problem descriptions.
-- **OpenCV Video Frame Extraction**: Automatically extracts **1 frame per second** from uploaded videos, strictly **capped at 10 frames per video** to keep payload sizes optimized while capturing chronological anomalies (e.g., LED blink codes, boot loops, screen flicker).
-- **Gemini 1.5 Pro Technician System Prompt**: Leverages Google's flagship multimodal model instructed as a certified Master Laptop Technician to output:
-  1. **Observed Symptoms & Physical Anomalies**
-  2. **Likely Root Cause**
-  3. **Diagnostic Confidence (High/Med/Low)**
-  4. **Step-by-Step Fix (Phase 1: Non-invasive / Phase 2: Hardware repair)**
-  5. **Safety Warnings**
-- **Structured & Markdown Responses**: Returns both the full markdown diagnostic report and structured parsed sections for frontend consumption.
-- **CORS Enabled**: Ready for frontend integrations (React, Next.js, Vue, or plain HTML/JS).
+1. **Scoped Product Focus (Step 1)**:
+   - 💻 **Laptops & Computers**: Displays, motherboards, batteries, cooling fans.
+   - 🌀 **Ceiling Fans**: Run capacitors, motor windings, bearing noise, speed regulators.
+   - ⚙️ **Mixer Grinders & Blenders**: Coupler teeth wear, overload switches, carbon brushes.
+   - 🧺 **Washing Machines**: Drain pump blockages, drive belts, unbalance sensors, door locks.
+   - 📡 **Wi-Fi Routers**: Optical LOS faults, boot loops, overheating, surge damage.
+   - 🔍 **Auto-Detect**: Open vision-language classification for arbitrary electronics.
+
+2. **OpenCV 1 FPS Video Frame Extraction**:
+   - Automatically samples uploaded diagnostic video clips at **1 frame per second** (capped at 10 frames per video).
+   - Captures chronological faults such as status LED blink codes, boot loops, sparking, fan spin, or screen flicker without bloating payload size.
+
+3. **Step 6 & 7 Safety & Confidence Guardrails**:
+   - **Confidence Threshold**: Explicitly rates confidence as **High**, **Med**, or **Low**. When confidence is Med/Low, the UI prompts the user to provide a closer, clearer macro photo rather than attempting unconfirmed repairs.
+   - **High-Risk Guardrail**: Automatically flags high-risk repairs (mains electricity, 230V/110V, high-voltage capacitors, swollen lithium batteries) and urges users to consult a certified technician via the in-app **"Find a Professional"** escalation tool.
+
+4. **Interactive 2-Phase Fix Checklist**:
+   - **Phase 1: Non-invasive (Software & Basic Troubleshooting)** (Safe reset, external monitor, cleaning).
+   - **Phase 2: Hardware Repair (Disassembly & Tools Required)** (JIS screwdrivers, multimeter, replacement specs).
+
+5. **Step 9 Continuous Improvement Feedback Loop**:
+   - "Was this diagnosis correct?" feedback widget (👍 / 👎).
+   - Submits user feedback and actual fault corrections to `POST /feedback`, appending samples to `data/feedback_log.jsonl` for future fine-tuning datasets.
 
 ---
 
@@ -26,20 +52,26 @@ An AI-powered diagnostic backend for diagnosing laptop hardware and software pro
 Viziguide/
 ├── backend/
 │   ├── __init__.py
-│   └── main.py            # FastAPI app, OpenCV extraction, Gemini integration
-├── .env.example           # Environment template for Gemini API key and configs
-├── .gitignore             # Standard Python and environment gitignore
-├── requirements.txt       # Project dependencies
-└── README.md              # Documentation and usage guide
+│   └── main.py              # FastAPI app, OpenCV 1 FPS extractor, Gemini 1.5 Pro, static mount
+├── frontend/
+│   ├── index.html           # Modern responsive diagnostic web application
+│   ├── style.css            # Accessible, high-contrast technician styling & print layout
+│   └── app.js               # Frontend controller, API client, drag-and-drop & checklist
+├── data/
+│   └── feedback_log.jsonl   # Step 9 collected feedback dataset for model fine-tuning
+├── .env.example             # Template for GEMINI_API_KEY and model configs
+├── .gitignore               # Standard Python & environment gitignore
+├── requirements.txt         # Dependencies
+└── README.md                # Comprehensive documentation
 ```
 
 ---
 
 ## 🛠️ Quick Start
 
-### 1. Create a Virtual Environment
+### 1. Set Up Virtual Environment
 
-```bash
+```powershell
 # Windows (PowerShell)
 python -m venv venv
 .\venv\Scripts\Activate.ps1
@@ -57,128 +89,83 @@ pip install -r requirements.txt
 
 ### 3. Configure API Key
 
-Copy the `.env.example` file to `.env`:
+Copy `.env.example` to `.env`:
 
 ```bash
-# Windows (PowerShell)
+# Windows
 Copy-Item .env.example .env
 
 # Linux / macOS
 cp .env.example .env
 ```
 
-Edit `.env` and add your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey):
+Add your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey):
 
 ```env
-GEMINI_API_KEY=AIzaSy...your_actual_key_here
+GEMINI_API_KEY=AIzaSy...your_gemini_api_key_here
 GEMINI_MODEL=gemini-1.5-pro
 HOST=0.0.0.0
 PORT=8000
 ```
 
-### 4. Run the Backend Server
+### 4. Start the Application
 
 ```bash
-# Option A: Run directly with Python
+# Run backend (also serves frontend at root http://localhost:8000)
 python backend/main.py
-
-# Option B: Run via Uvicorn CLI
+```
+Or with Uvicorn:
+```bash
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The server will start at `http://localhost:8000`.
+- **Open Web Application**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+*(Note: You can also open `frontend/index.html` directly in your browser; it automatically connects to `http://localhost:8000` via CORS).*
 
 ---
 
-## 📖 API Documentation
-
-Once the server is running, visit:
-- **Interactive Swagger UI**: `http://localhost:8000/docs`
-- **ReDoc**: `http://localhost:8000/redoc`
-
-### Endpoints
+## 📡 API Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/` | Service info and root health probe |
-| `GET` | `/health` | Liveness check & API key status check |
-| `POST` | `/diagnose` | Core multimodal diagnostic endpoint |
+| `GET` | `/` | Serves the Viziguide Web Application |
+| `GET` | `/health` | Service liveness probe & API key status |
+| `GET` | `/products` | List of 5 scoped product categories with common fault references |
+| `POST` | `/diagnose` | Multimodal diagnostic engine (photos, video, category, description) |
+| `POST` | `/feedback` | Records user feedback to `data/feedback_log.jsonl` (Step 9) |
 
 ---
 
 ## 🧪 Testing the `/diagnose` Endpoint
 
-### Example 1: Photos + Description (cURL)
+### Photos + Description (cURL)
 
 ```bash
 curl -X POST "http://localhost:8000/diagnose" \
-  -F "images=@laptop_screen_defect.jpg" \
-  -F "images=@motherboard_damage.jpg" \
-  -F "description=Laptop screen displays vertical green and magenta lines upon boot. Fan spins at maximum speed."
+  -F "images=@damaged_screen.jpg" \
+  -F "product_category=laptop" \
+  -F "description=Laptop screen displays vertical colored lines upon boot. Fan runs at maximum speed."
 ```
 
-### Example 2: Video + Description (cURL)
+### Video + Description (cURL)
 
 ```bash
 curl -X POST "http://localhost:8000/diagnose" \
-  -F "video=@boot_loop_power_led.mp4" \
-  -F "description=Dell XPS 13 does not turn on. Power LED blinks 3 amber then 5 white flashes."
-```
-
-### Example 3: Python Client Request
-
-```python
-import requests
-
-url = "http://localhost:8000/diagnose"
-
-files = [
-    ("images", ("screen.jpg", open("screen.jpg", "rb"), "image/jpeg")),
-    ("videos", ("boot_blink.mp4", open("boot_blink.mp4", "rb"), "video/mp4")),
-]
-data = {
-    "description": "Lenovo ThinkPad X1 Carbon has no display on power on, but keyboard backlights pulse."
-}
-
-response = requests.post(url, files=files, data=data)
-print(response.json())
+  -F "video=@power_led_blink.mp4" \
+  -F "product_category=laptop" \
+  -F "description=Power LED blinks 3 amber then 5 white flashes. Laptop won't turn on."
 ```
 
 ---
 
-## 📋 Response Schema
+## 🔮 Roadmap: Fine-Tuning Your Custom Model (Steps 3 to 5)
 
-```json
-{
-  "status": "success",
-  "model": "gemini-1.5-pro",
-  "inputs": {
-    "images_count": 1,
-    "videos_count": 1,
-    "frames_extracted": 10,
-    "has_description": true
-  },
-  "diagnosis": "### 1. Observed Symptoms & Physical Anomalies\n...\n### 2. Likely Root Cause\n...\n### 3. Diagnostic Confidence (High/Med/Low)\n...\n### 4. Step-by-Step Fix\n...\n### 5. Safety Warnings\n...",
-  "sections": {
-    "observed_symptoms": "...",
-    "root_cause": "...",
-    "confidence": "High...",
-    "step_by_step_fix": "#### Phase 1: Non-invasive...\n#### Phase 2: Hardware repair...",
-    "safety_warnings": "..."
-  }
-}
-```
+Once you collect enough real-world failure photos from user uploads (Step 9 feedback log):
 
----
+1. **Collect Images**: 100–300 images per fault class (e.g. `capacitor_leak`, `burnt_mosfet`, `coupler_stripped`), including normal "no defect" photos.
+2. **Label Data**: Use Roboflow, Label Studio, or CVAT with a 70% train / 15% validation / 15% test split.
+3. **Transfer Learning**: Fine-tune a pretrained **EfficientNet-B0/B4** or **YOLOv8** on Google Colab GPU.
+4. **Deploy**: Wrap the model into the `/diagnose` pipeline to complement Gemini's reasoning.
 
-## 🛡️ Frame Extraction Technical Details
-
-- **Sampling**: `1 FPS` (`frame_interval = max(1, round(fps / 1.0))`)
-- **Safety Cap**: `10 frames` maximum per video to optimize multimodal payload size and minimize latency.
-- **Color Correction**: Automatically converts OpenCV's default BGR color space to RGB before passing PIL Image instances to the Gemini SDK.
-- **Resource Cleanup**: Uses temporary files with atomic deletion in a `finally` block to prevent disk bloat.
-
-=======
-# Viziguide
-Avinya Pitch IT! competition: Team Zypher
->>>>>>> 1e55c687ee5acfceb2e39d6cd35ce04af2da150f

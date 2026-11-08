@@ -40,3 +40,7 @@ Thumbs.db
 tmp/
 *.tmp
 
+# Runtime logs and feedback data
+data/*.jsonl
+!data/.gitkeep
+

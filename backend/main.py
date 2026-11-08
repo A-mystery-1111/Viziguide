@@ -1,15 +1,19 @@
+import datetime
 import io
+import json
 import logging
 import math
 import os
 import re
 import tempfile
+import uuid
 from typing import Any, Dict, List, Optional
 
 import cv2
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import google.generativeai as genai
 from PIL import Image
 from pydantic import BaseModel, Field
@@ -23,9 +27,9 @@ logger = logging.getLogger("viziguide.backend")
 
 # Initialize FastAPI application
 app = FastAPI(
-    title="Viziguide - Laptop Hardware & Software AI Diagnostics",
-    description="Multimodal diagnostic backend using OpenCV and Gemini 1.5 Pro to analyze laptop issues from photos and videos.",
-    version="1.0.0",
+    title="Viziguide - Multimodal AI Hardware & Appliance Diagnostics",
+    description="Multimodal diagnostic backend using OpenCV and Gemini 1.5 Pro to diagnose laptops, appliances, and electronics with safety guardrails and manual retrieval.",
+    version="2.0.0",
 )
 
 # Enable CORS for frontend integration
@@ -37,52 +41,148 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Gemini Technician System Prompt
-TECHNICIAN_SYSTEM_PROMPT = """You are a certified Master Laptop Hardware & Systems Diagnostic Technician with over 20 years of experience diagnosing, troubleshooting, and repairing laptop computers across all major manufacturers (e.g., Apple MacBook, Dell XPS/Latitude, Lenovo ThinkPad, HP Spectre/EliteBook, ASUS ROG/ZenBook, Acer, Framework, and Razer).
+# Scoped Product Knowledge Base (Step 1 & Step 2 of Viziguide philosophy)
+SCOPED_PRODUCTS = [
+    {
+        "id": "laptop",
+        "name": "Laptop & Mobile Workstations",
+        "category": "Computing",
+        "icon": "laptop",
+        "common_issues": [
+            "Vertical/Horizontal Screen Artifacts & Lines",
+            "Swollen Battery / Chassis Bulging",
+            "Power LED Blinking Diagnostic Code / No POST",
+            "Thermal Throttling / Loud Grinding Fan",
+            "Burnt Component / Liquid Spill on Motherboard",
+        ],
+        "manual_reference": "Official OEM Service & Maintenance Guides (Dell, Lenovo, Apple, HP)",
+        "high_risk_triggers": ["swollen battery", "battery puncture", "motherboard short", "inverter capacitor"],
+    },
+    {
+        "id": "ceiling_fan",
+        "name": "Ceiling Fan",
+        "category": "Home Appliance",
+        "icon": "fan",
+        "common_issues": [
+            "Fan Spins Very Slow (Failed Capacitor)",
+            "Loud Humming or Grinding Bearing Noise",
+            "Wobbling Blades / Loose Downrod Mount",
+            "Completely Dead (Tripped Fuse or Blown Thermal Cutoff)",
+            "Speed Regulator Has No Effect",
+        ],
+        "manual_reference": "Appliance Standards IEC 60335-2-80 Service Instructions",
+        "high_risk_triggers": ["mains electricity", "230v", "110v", "live ceiling wiring", "capacitor discharge"],
+    },
+    {
+        "id": "mixer_grinder",
+        "name": "Mixer Grinder / Blender",
+        "category": "Kitchen Appliance",
+        "icon": "blender",
+        "common_issues": [
+            "Overload Switch Trips Repeatedly",
+            "Motor Coupler Teeth Stripped or Broken",
+            "Carbon Brushes Worn / Heavy Sparking",
+            "Blade Jar Jammed or Leaking Liquid",
+            "Burning Plastic / Motor Varnish Odor",
+        ],
+        "manual_reference": "Small Appliance Universal Motor & Coupler Overhaul Guidelines",
+        "high_risk_triggers": ["live motor terminal", "rotor short", "brush fire hazard", "mains shock"],
+    },
+    {
+        "id": "washing_machine",
+        "name": "Washing Machine",
+        "category": "Heavy Appliance",
+        "icon": "washing-machine",
+        "common_issues": [
+            "OE / E20 Error: Water Not Draining (Pump Clog)",
+            "Drum Does Not Spin (Broken Drive Belt / Worn Motor Brushes)",
+            "Violent Shaking / UE Unbalance Code (Damaged Shock Absorber)",
+            "Water Leaking from Dispenser or Door Gasket",
+            "Door Lock Error (Failed Interlock Switch)",
+        ],
+        "manual_reference": "Direct Drive & Belt Appliance Diagnostics & Error Code Manuals",
+        "high_risk_triggers": ["mains wiring near water", "drum capacitor", "motor voltage", "water valve flood"],
+    },
+    {
+        "id": "wifi_router",
+        "name": "Wi-Fi Router & Network Gateway",
+        "category": "Networking",
+        "icon": "wifi",
+        "common_issues": [
+            "Red/Amber LOS Indicator (Optical / Cable Signal Lost)",
+            "Boot Loop / Power LED Flashing Constantly",
+            "Overheating / Random Wireless Drops under Load",
+            "Corrupted Firmware after Failed Update",
+            "Burned Barrel Jack / Voltage Surge from Lightning",
+        ],
+        "manual_reference": "Standard IEEE 802.11 Enterprise Gateway Troubleshooting Guides",
+        "high_risk_triggers": ["power adapter high voltage", "internal capacitor explosion"],
+    },
+]
 
-Your role is to conduct a rigorous diagnostic assessment based on visual evidence (uploaded photographs, chronological video frames extracted at 1 frame per second from diagnostic clips) and any user-provided symptom description.
+# Master Technician System Prompt incorporating Safety Guardrails & Scoped Manual Retrieval
+TECHNICIAN_SYSTEM_PROMPT = """You are a certified Master Diagnostic Technician & Systems Engineer for electronics, computers, and home appliances with 20+ years of bench repair experience.
+You specialize in five focused product categories:
+1. Laptop Computers (motherboards, displays, batteries, thermal cooling)
+2. Ceiling Fans (capacitors, bearings, speed regulators, windings)
+3. Mixer Grinders (overload protectors, couplers, carbon brushes, motor jars)
+4. Washing Machines (drain pumps, drive belts, shock absorbers, door latches)
+5. Wi-Fi Routers (firmware, optical LOS, power supply regulators, thermal)
 
-Evaluate hardware physical integrity, motherboard components, display defects (backlight bleed, stage lighting, panel cracks, flex cable damage, GPU artifacting), thermal indicators (vent blockage, thermal pad degradation, burnt ICs), port and chassis damage, battery swelling, power/charging LEDs, and software/firmware indicators (BSOD bugchecks, kernel panic logs, UEFI/BIOS error codes, blinking LED diagnostic codes).
+Your mission is to analyze visual evidence (photos, video frames sampled at 1 fps) and user symptoms, identify the product and fault accurately, and produce a safe, rigorous diagnostic report based strictly on verified technical principles and official repair manuals.
 
-You MUST format your diagnostic report with the following 5 distinct sections and headers:
+CRITICAL SAFETY & GUARDRAIL RULES:
+- High-Risk Guardrail: If an issue involves 110V/230V mains electricity, high-voltage capacitors, swollen/punctured lithium-ion batteries, motor rewinding, or hazardous live wiring, you MUST explicitly flag it as HIGH RISK and urge the user to hire a certified professional instead of DIY.
+- Confidence Threshold: Clearly rate confidence as [High], [Med], or [Low]. If photos are blurry, lighting is bad, or internal testing (multimeter/oscilloscope) is required, label confidence as Med or Low and tell the user what specific closer photo, angle, or test is needed before attempting repair.
+- Step-by-Step Fix: Divide fix into Phase 1 (Non-invasive: basic reset, cleaning, software, external checks) and Phase 2 (Hardware Repair: disassembly, tools required, component replacement). Always list mandatory initial safety steps like "UNPLUG FROM MAINS FIRST".
+
+You MUST strictly format your diagnostic report with the following 6 headers:
+
+### 0. Identified Product & Target Component
+- Identified device (e.g., Apple MacBook Air M1, Crompton Ceiling Fan, Preethi Mixer Grinder, LG Front-Load Washer, TP-Link Router).
+- Specific component/subassembly affected (e.g., Display LVDS Cable, Motor Run Capacitor, Drain Pump Impeller).
 
 ### 1. Observed Symptoms & Physical Anomalies
-- Provide an itemized, precise analysis of all visual and physical anomalies observed in the photos and video frames.
-- Correlate visual findings with any user-reported symptoms.
-- Point out any specific components, ports, screen regions, or indicators involved.
+- Itemized breakdown of all visible physical signs in the photos and video frames (e.g., thermal discoloration, stripped coupler teeth, status LED blink pattern, cracked LCD substrate, water leakage residue).
+- Correlation with the user's reported description.
 
 ### 2. Likely Root Cause
-- Deliver an in-depth technical explanation of the primary root cause (distinguishing clearly between hardware component failure, firmware/BIOS corruption, thermal throttling, GPU failure, loose interconnect, or OS/driver corruption).
-- Identify potential secondary or cascading damage that should be inspected.
+- Deep technical root-cause analysis distinguishing between mechanical wear, electrical breakdown, thermal stress, or firmware/software faults.
+- Identify potential secondary damage to inspect.
 
 ### 3. Diagnostic Confidence (High/Med/Low)
-- State the overall confidence rating explicitly: [High / Med / Low]
-- Justify the confidence level technically. Note what cannot be confirmed purely from visual inspection and would require bench equipment (multimeter, thermal imager, schematics, boardview).
+- State confidence explicitly: "Diagnostic Confidence: [High | Med | Low]"
+- Provide technical justification for this rating. If Low or Med, state what additional photo angle or physical multimeter measurement is needed.
 
 ### 4. Step-by-Step Fix
 #### Phase 1: Non-invasive (Software & Basic Troubleshooting)
-- Safe, non-destructive initial steps (e.g., hard EC/SMC reset, external display validation, BIOS defaults reset, clean driver reinstallation, Safe Mode triage, power drain).
-#### Phase 2: Hardware repair (Disassembly, Component Replacement & Soldering)
-- Physical repair procedure, including required tools (e.g., spudger, JIS/Phillips #00, Torx T5, multimeter, thermal paste, soldering station), component replacement specifications, ribbon cable handling, and torque precautions.
+- Safe, non-destructive initial steps (e.g., reset procedure, external check, clearing debris).
+#### Phase 2: Hardware repair (Disassembly, Component Replacement & Tools)
+- Clear repair instructions including required tools (e.g., JIS screwdriver, multimeter, soldering iron, spudger, socket wrench), part specifications, and reassembly precautions.
 
-### 5. Safety Warnings
-- Explicit, critical precautions to prevent electric shock, motherboard ESD damage, thermal runaway from swollen/punctured lithium-ion batteries, high-voltage capacitor discharge, and glass injury.
-
-Maintain a professional, authoritative, and safety-conscious technician tone. Never skip any of the required sections."""
+### 5. Safety Warnings & Risk Level
+- State Risk Level: [LOW RISK - DIY SAFE | MEDIUM RISK - PROCEED WITH CAUTION | HIGH RISK - PROFESSIONAL REQUIRED]
+- Clear bulleted safety rules (e.g., disconnect mains plug, discharge capacitor, wear eye protection, ESD grounding).
+- If HIGH RISK, explicitly instruct the user to consult a licensed technician."""
 
 
 # Pydantic Models for Response
 class InputsSummary(BaseModel):
+    product_hint: Optional[str] = Field(default=None, description="User-selected product category")
     images_count: int = Field(description="Number of uploaded static images processed")
     videos_count: int = Field(description="Number of uploaded video files processed")
-    frames_extracted: int = Field(description="Total video frames extracted at 1 frame/sec (capped at 10 per video)")
+    frames_extracted: int = Field(description="Total video frames extracted at 1 frame/sec")
     has_description: bool = Field(description="Whether a text description was provided")
 
 
 class ParsedSections(BaseModel):
+    identified_product: Optional[str] = None
     observed_symptoms: Optional[str] = None
     root_cause: Optional[str] = None
     confidence: Optional[str] = None
+    confidence_level: str = "Med"  # High, Med, Low
+    is_high_risk: bool = False
+    risk_level: str = "MEDIUM RISK"
     step_by_step_fix: Optional[str] = None
     safety_warnings: Optional[str] = None
 
@@ -95,6 +195,15 @@ class DiagnosisResponse(BaseModel):
     sections: ParsedSections
 
 
+class FeedbackRequest(BaseModel):
+    diagnosis_id: Optional[str] = None
+    product: Optional[str] = None
+    is_correct: bool
+    confidence_was: Optional[str] = None
+    user_notes: Optional[str] = None
+    actual_issue: Optional[str] = None
+
+
 def extract_frames_from_video(
     video_bytes: bytes,
     max_frames: int = 10,
@@ -102,19 +211,9 @@ def extract_frames_from_video(
     filename_hint: str = "video.mp4",
 ) -> List[Image.Image]:
     """
-    Extracts frames from video bytes at a rate of 1 frame per second,
-    capped at max_frames (default: 10 frames), to optimize payload sizes for multimodal LLMs.
-
-    Args:
-        video_bytes: Raw bytes of the uploaded video.
-        max_frames: Maximum number of frames to extract (cap = 10).
-        fps_sample_rate: Frames to sample per second (default = 1.0).
-        filename_hint: Used to preserve original file extension for OpenCV container decoding.
-
-    Returns:
-        List of PIL.Image objects in RGB format.
+    Extracts frames from video bytes at 1 frame per second, capped at max_frames (10 frames),
+    to keep multimodal payload sizes optimized while capturing dynamic faults.
     """
-    # Determine appropriate extension for OpenCV video container
     _, ext = os.path.splitext(filename_hint)
     if not ext or ext.lower() not in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"]:
         ext = ".mp4"
@@ -123,7 +222,6 @@ def extract_frames_from_video(
     extracted_frames: List[Image.Image] = []
 
     try:
-        # OpenCV cv2.VideoCapture requires a filesystem path
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_video_file:
             temp_video_file.write(video_bytes)
             temp_video_file.flush()
@@ -134,18 +232,16 @@ def extract_frames_from_video(
             logger.warning(f"Failed to open video file {filename_hint} with OpenCV.")
             return []
 
-        # Read native video frame rate
         native_fps = cap.get(cv2.CAP_PROP_FPS)
         if not native_fps or native_fps <= 0 or math.isnan(native_fps):
-            native_fps = 30.0  # standard fallback
+            native_fps = 30.0
 
-        # Calculate interval to capture 1 frame per second
         frame_interval = max(1, int(round(native_fps / fps_sample_rate)))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         logger.info(
-            f"Processing video '{filename_hint}': native_fps={native_fps:.2f}, "
-            f"total_frames={total_frames}, frame_interval={frame_interval}, max_cap={max_frames}"
+            f"Processing video '{filename_hint}': fps={native_fps:.2f}, "
+            f"frames={total_frames}, interval={frame_interval}, max_cap={max_frames}"
         )
 
         frame_counter = 0
@@ -155,7 +251,6 @@ def extract_frames_from_video(
                 break
 
             if frame_counter % frame_interval == 0:
-                # Convert BGR (OpenCV) to RGB (PIL)
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 pil_image = Image.fromarray(rgb_frame)
                 extracted_frames.append(pil_image)
@@ -163,16 +258,15 @@ def extract_frames_from_video(
             frame_counter += 1
 
         cap.release()
-        logger.info(f"Successfully extracted {len(extracted_frames)} frames from '{filename_hint}'.")
+        logger.info(f"Extracted {len(extracted_frames)} frames from '{filename_hint}'.")
 
     except Exception as exc:
-        logger.error(f"Error extracting frames from video '{filename_hint}': {exc}", exc_info=True)
+        logger.error(f"Error extracting video frames: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Could not process video file '{filename_hint}': {str(exc)}",
         )
     finally:
-        # Guarantee cleanup of temporary file
         if temp_video_path and os.path.exists(temp_video_path):
             try:
                 os.remove(temp_video_path)
@@ -184,16 +278,17 @@ def extract_frames_from_video(
 
 def parse_diagnostic_sections(markdown_text: str) -> ParsedSections:
     """
-    Parses the standard 5 sections from the Gemini technician diagnostic output.
+    Parses sections, confidence rating, and safety risk levels from the technician report.
     """
     sections = ParsedSections()
 
     patterns = {
+        "identified_product": r"(?:###?\s*(?:0\.?\s*)?Identified Product & Target Component)(.*?)(?=###?\s*(?:1\.?\s*)?Observed Symptoms|$)",
         "observed_symptoms": r"(?:###?\s*(?:1\.?\s*)?Observed Symptoms & Physical Anomalies)(.*?)(?=###?\s*(?:2\.?\s*)?Likely Root Cause|$)",
         "root_cause": r"(?:###?\s*(?:2\.?\s*)?Likely Root Cause)(.*?)(?=###?\s*(?:3\.?\s*)?Diagnostic Confidence|$)",
         "confidence": r"(?:###?\s*(?:3\.?\s*)?Diagnostic Confidence(?:\s*\(High/Med/Low\))?)(.*?)(?=###?\s*(?:4\.?\s*)?Step-by-Step Fix|$)",
         "step_by_step_fix": r"(?:###?\s*(?:4\.?\s*)?Step-by-Step Fix)(.*?)(?=###?\s*(?:5\.?\s*)?Safety Warnings|$)",
-        "safety_warnings": r"(?:###?\s*(?:5\.?\s*)?Safety Warnings)(.*?)$",
+        "safety_warnings": r"(?:###?\s*(?:5\.?\s*)?Safety Warnings & Risk Level)(.*?)$",
     }
 
     for key, pattern in patterns.items():
@@ -202,64 +297,128 @@ def parse_diagnostic_sections(markdown_text: str) -> ParsedSections:
             extracted = match.group(1).strip()
             setattr(sections, key, extracted if extracted else None)
 
+    # Determine confidence level
+    conf_text = (sections.confidence or "") + " " + markdown_text[:800]
+    if re.search(r"\bhigh\b", conf_text, re.IGNORECASE):
+        sections.confidence_level = "High"
+    elif re.search(r"\blow\b", conf_text, re.IGNORECASE):
+        sections.confidence_level = "Low"
+    else:
+        sections.confidence_level = "Med"
+
+    # Determine High-Risk Guardrail
+    high_risk_keywords = [
+        "high risk",
+        "professional required",
+        "certified technician",
+        "mains voltage",
+        "220v",
+        "230v",
+        "240v",
+        "electrocution",
+        "thermal runaway",
+        "swollen battery",
+        "high-voltage capacitor",
+        "fire hazard",
+    ]
+    check_text = (sections.safety_warnings or "") + " " + markdown_text
+    is_high = any(kw in check_text.lower() for kw in high_risk_keywords)
+    sections.is_high_risk = is_high
+    if is_high:
+        sections.risk_level = "HIGH RISK - PROFESSIONAL REQUIRED"
+    elif "medium risk" in check_text.lower():
+        sections.risk_level = "MEDIUM RISK - PROCEED WITH CAUTION"
+    else:
+        sections.risk_level = "LOW RISK - DIY SAFE"
+
     return sections
 
 
-@app.get("/")
-async def root():
-    """Health check and service information."""
-    return {
-        "service": "Viziguide Multimodal AI Laptop Diagnostics API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "diagnose_endpoint": "/diagnose",
-    }
-
-
+# API Endpoints
 @app.get("/health")
 async def health():
-    """Liveness probe."""
-    api_key_configured = bool(os.getenv("GEMINI_API_KEY"))
+    """Liveness probe and system status."""
+    api_key_configured = bool(os.getenv("GEMINI_API_KEY") and os.getenv("GEMINI_API_KEY") != "your_gemini_api_key_here")
     return {
         "status": "healthy",
         "gemini_api_key_configured": api_key_configured,
-        "default_model": os.getenv("GEMINI_MODEL", "gemini-1.5-pro"),
+        "default_model": os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+        "scoped_products_count": len(SCOPED_PRODUCTS),
+    }
+
+
+@app.get("/products")
+async def get_products():
+    """Returns the narrow-scoped supported products and common faults for RAG guidance."""
+    return {"products": SCOPED_PRODUCTS}
+
+
+@app.post("/feedback")
+async def record_feedback(feedback: FeedbackRequest):
+    """
+    Step 9: Improve over time.
+    Collects user feedback on diagnosis accuracy to build the fine-tuning dataset.
+    """
+    feedback_entry = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "product": feedback.product,
+        "is_correct": feedback.is_correct,
+        "confidence_was": feedback.confidence_was,
+        "user_notes": feedback.user_notes,
+        "actual_issue": feedback.actual_issue,
+    }
+
+    try:
+        feedback_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        os.makedirs(feedback_dir, exist_ok=True)
+        feedback_file = os.path.join(feedback_dir, "feedback_log.jsonl")
+        with open(feedback_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(feedback_entry) + "\n")
+        logger.info(f"Recorded diagnosis feedback: is_correct={feedback.is_correct}, product={feedback.product}")
+    except Exception as e:
+        logger.warning(f"Could not append to feedback log: {e}")
+
+    return {
+        "status": "success",
+        "message": "Thank you! Your feedback helps fine-tune Viziguide's fault diagnostic models.",
+        "feedback_id": feedback_entry["id"],
     }
 
 
 @app.post("/diagnose", response_model=DiagnosisResponse)
 async def diagnose(
-    images: Optional[List[UploadFile]] = File(None, description="One or more laptop photos (JPEG, PNG, WebP)"),
-    image: Optional[UploadFile] = File(None, description="Single laptop photo alias"),
-    videos: Optional[List[UploadFile]] = File(None, description="One or more diagnostic videos (MP4, MOV, MKV, WebM)"),
-    video: Optional[UploadFile] = File(None, description="Single diagnostic video alias"),
+    images: Optional[List[UploadFile]] = File(None, description="One or more equipment photos"),
+    image: Optional[UploadFile] = File(None, description="Single photo alias"),
+    videos: Optional[List[UploadFile]] = File(None, description="One or more diagnostic videos"),
+    video: Optional[UploadFile] = File(None, description="Single video alias"),
+    product_category: Optional[str] = Form(None, description="Optional scoped product selection"),
     description: Optional[str] = Form(None, description="User symptom description or operational context"),
 ):
     """
     Multimodal diagnostic endpoint.
-    Accepts single or multiple photos, video clips, and an optional problem description.
-    Extracts 1 frame per second from uploaded videos (capped at 10 frames per video) using OpenCV,
-    and submits all visual evidence to gemini-1.5-pro for expert technician analysis.
+    Accepts photos, video clips, product category hint, and symptom descriptions.
+    Extracts 1 frame/sec from videos (capped at 10 frames), applies Gemini 1.5 Pro,
+    and returns a structured technical report with safety guardrails.
     """
-    # Verify Gemini API key configuration
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     if not gemini_api_key or gemini_api_key.strip() in ("", "your_gemini_api_key_here"):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=(
                 "GEMINI_API_KEY is not configured. Please set a valid Google Gemini API key "
-                "in your .env file or environment variables."
+                "in your .env file."
             ),
         )
 
-    # Aggregate images (support both plural 'images' list and singular 'image' alias)
+    # Aggregate images
     all_image_files: List[UploadFile] = []
     if images:
         all_image_files.extend([f for f in images if f.filename])
     if image and image.filename:
         all_image_files.append(image)
 
-    # Aggregate videos (support both plural 'videos' list and singular 'video' alias)
+    # Aggregate videos
     all_video_files: List[UploadFile] = []
     if videos:
         all_video_files.extend([v for v in videos if v.filename])
@@ -268,14 +427,13 @@ async def diagnose(
 
     has_description = bool(description and description.strip())
 
-    # Validation: Ensure at least one input is provided
     if not all_image_files and not all_video_files and not has_description:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one image, video, or symptom description must be provided for laptop diagnosis.",
+            detail="At least one photo, video, or symptom description must be provided for diagnosis.",
         )
 
-    # 1. Process Uploaded Images
+    # 1. Process Photos
     pil_images: List[Image.Image] = []
     for img_upload in all_image_files:
         try:
@@ -293,7 +451,7 @@ async def diagnose(
                 detail=f"Invalid image file '{img_upload.filename}': {str(img_err)}",
             )
 
-    # 2. Process Uploaded Videos (Extract 1 frame per second, capped at 10 frames per video)
+    # 2. Process Videos (1 FPS, max 10 frames per video)
     all_extracted_frames: List[Image.Image] = []
     for vid_upload in all_video_files:
         try:
@@ -315,77 +473,101 @@ async def diagnose(
                 detail=f"Failed to process video '{vid_upload.filename}': {str(vid_err)}",
             )
 
-    # 3. Assemble Multimodal Payload for Gemini
-    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
-    logger.info(
-        f"Preparing Gemini diagnosis: {len(pil_images)} photos, "
-        f"{len(all_extracted_frames)} video frames from {len(all_video_files)} video(s), "
-        f"description_provided={has_description}"
-    )
-
+    # 3. Assemble Multimodal Prompt
+    model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
     content_parts: List[Any] = []
 
-    # Include user description if provided
-    if has_description:
-        content_parts.append(
-            f"### User-Reported Laptop Problem & Symptoms:\n{description.strip()}\n"
-        )
+    # Category / Scoped context
+    scope_context = ""
+    if product_category and product_category.lower() != "auto":
+        matching = next((p for p in SCOPED_PRODUCTS if p["id"] == product_category.lower()), None)
+        if matching:
+            scope_context = (
+                f"\nScoped Product Category: {matching['name']} ({matching['category']})\n"
+                f"Verified Manual Reference: {matching['manual_reference']}\n"
+                f"Common Fault Reference: {', '.join(matching['common_issues'])}\n"
+            )
 
-    # Include uploaded static images
+    if scope_context or has_description:
+        user_text = "### Diagnostic Request & Reported Context:\n"
+        if scope_context:
+            user_text += scope_context
+        if has_description:
+            user_text += f"\nUser Symptom Description:\n{description.strip()}\n"
+        content_parts.append(user_text)
+
+    # Static images
     if pil_images:
         content_parts.append(
-            f"\n### Static Visual Evidence ({len(pil_images)} photograph{'s' if len(pil_images) > 1 else ''}):\n"
-            "Examine each photo for physical trauma, port warping, component burns, cracked traces, or screen defects:"
+            f"\n### Static Evidence ({len(pil_images)} photograph{'s' if len(pil_images) > 1 else ''}):\n"
+            "Examine carefully for physical damage, burnt traces, cracks, stripped couplers, or leak stains:"
         )
         content_parts.extend(pil_images)
 
-    # Include extracted video frames
+    # Extracted video frames
     if all_extracted_frames:
         content_parts.append(
-            f"\n### Dynamic Video Evidence ({len(all_extracted_frames)} chronological frame{'s' if len(all_extracted_frames) > 1 else ''} sampled at 1 fps):\n"
-            "Analyze chronological sequence for flickering displays, LED blink codes, boot loops, fan spin behavior, or intermittent anomalies:"
+            f"\n### Dynamic Evidence ({len(all_extracted_frames)} chronological video frames sampled at 1 fps):\n"
+            "Analyze chronological sequence for blink codes, sparking, wobble, boot loops, or flickering:"
         )
         content_parts.extend(all_extracted_frames)
 
-    # If only text was provided without visual evidence, add guidance
     if not pil_images and not all_extracted_frames:
         content_parts.append(
             "Note: No photos or videos were uploaded. Provide the best possible diagnostic assessment "
-            "based strictly on the user's reported symptoms and note recommendations for visual inspection."
+            "based strictly on reported symptoms, verified manual troubleshooting, and note clear visual inspection instructions."
         )
 
-    # 4. Invoke Google Generative AI SDK
-    try:
-        genai.configure(api_key=gemini_api_key)
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=TECHNICIAN_SYSTEM_PROMPT,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.2,
-                top_p=0.95,
-            ),
-        )
+    # 4. Generate diagnosis with Gemini (with transport='rest' and fallback candidate models)
+    genai.configure(api_key=gemini_api_key, transport="rest")
 
-        response = model.generate_content(content_parts)
-        diagnosis_text = response.text if response and hasattr(response, "text") else ""
+    candidate_models = [model_name]
+    for fallback in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"]:
+        if fallback not in candidate_models:
+            candidate_models.append(fallback)
 
-        if not diagnosis_text:
-            raise RuntimeError("Gemini model returned an empty response.")
+    response = None
+    used_model = model_name
+    last_err = None
 
-    except Exception as gemini_err:
-        logger.error(f"Gemini API invocation error: {gemini_err}", exc_info=True)
+    for candidate in candidate_models:
+        try:
+            logger.info(f"Attempting diagnosis with Gemini model: {candidate}")
+            model = genai.GenerativeModel(
+                model_name=candidate,
+                system_instruction=TECHNICIAN_SYSTEM_PROMPT,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.2,
+                    top_p=0.95,
+                ),
+            )
+            response = model.generate_content(content_parts)
+            if response and hasattr(response, "text") and response.text:
+                used_model = candidate
+                logger.info(f"Successfully generated diagnosis with model: {used_model}")
+                break
+        except Exception as candidate_err:
+            last_err = candidate_err
+            logger.warning(f"Model '{candidate}' failed: {candidate_err}. Trying next candidate...")
+            continue
+
+    diagnosis_text = response.text if response and hasattr(response, "text") else ""
+
+    if not diagnosis_text:
+        logger.error(f"All candidate Gemini models failed. Last error: {last_err}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Google Generative AI diagnostic generation failed: {str(gemini_err)}",
+            detail=f"AI diagnostic generation failed: {str(last_err)}",
         )
 
-    # 5. Parse Sections for Structured Output
+    # 5. Parse Sections & Safety Flags
     parsed_sections = parse_diagnostic_sections(diagnosis_text)
 
     return DiagnosisResponse(
         status="success",
-        model=model_name,
+        model=used_model,
         inputs=InputsSummary(
+            product_hint=product_category,
             images_count=len(pil_images),
             videos_count=len(all_video_files),
             frames_extracted=len(all_extracted_frames),
@@ -396,10 +578,15 @@ async def diagnose(
     )
 
 
+# Mount Frontend statically if directory exists
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+if os.path.isdir(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+
+
 if __name__ == "__main__":
     import uvicorn
 
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run("main:app", host=host, port=port, reload=True)
-
+    uvicorn.run("backend.main:app", host=host, port=port, reload=True)
