@@ -721,7 +721,8 @@ function setupModals() {
   });
 }
 
-const GITHUB_REPO_URL = "https://github.com/A-mystery-1111/Viziguide";
+// Active live public deployment link
+const LIVE_WEB_URL = "https://chicken-citations-defines-investment.trycloudflare.com";
 
 /* --------------------------------------------------------------------------
    10. Share Handlers (WhatsApp, Bluetooth / Nearby Share, Native Sheet, Email)
@@ -748,7 +749,7 @@ function generateShareText() {
     `📱 *Device:* ${device}\n` +
     `🎯 *Confidence:* ${conf} | *Risk:* ${risk}\n` +
     `💡 *Likely Root Cause:* ${rootCause}\n\n` +
-    `🔗 *View Full Report:* ${shareUrl}`
+    `🌐 *View Full Report Online:* ${shareUrl}`
   );
 }
 
@@ -911,7 +912,7 @@ function setupShareHandlers() {
    -------------------------------------------------------------------------- */
 function getWebsiteShareUrl() {
   const hostname = window.location.hostname;
-  // If running on a public deployed domain (Cloudflare Tunnel, Render, Vercel, etc.), use the actual live URL
+  // If running directly on a public domain/tunnel, use that origin
   if (
     hostname &&
     hostname !== "127.0.0.1" &&
@@ -921,8 +922,8 @@ function getWebsiteShareUrl() {
   ) {
     return window.location.origin;
   }
-  // If opened via local machine, share the active public live web link!
-  return "https://chicken-citations-defines-investment.trycloudflare.com";
+  // If viewing via local browser (127.0.0.1), always share the live public web link
+  return LIVE_WEB_URL;
 }
 
 function getWebsiteShareText() {
