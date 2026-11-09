@@ -911,7 +911,7 @@ function setupShareHandlers() {
    -------------------------------------------------------------------------- */
 function getWebsiteShareUrl() {
   const hostname = window.location.hostname;
-  // If running on a public domain/deployment, share that URL
+  // If running on a public deployed domain (Cloudflare Tunnel, Render, Vercel, etc.), use the actual live URL
   if (
     hostname &&
     hostname !== "127.0.0.1" &&
@@ -921,8 +921,8 @@ function getWebsiteShareUrl() {
   ) {
     return window.location.origin;
   }
-  // If running locally, return the live GitHub repository URL so WhatsApp and other apps render a 100% clickable link!
-  return GITHUB_REPO_URL;
+  // If opened via local machine, share the active public live web link!
+  return "https://chicken-citations-defines-investment.trycloudflare.com";
 }
 
 function getWebsiteShareText() {

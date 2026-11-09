@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: viziguide
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false          # You will paste this in the Render dashboard (keep it secret)
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
+      - key: HOST
+        value: 0.0.0.0
+    healthCheckPath: /health
+
