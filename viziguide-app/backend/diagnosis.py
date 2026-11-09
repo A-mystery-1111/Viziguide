@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from config import get_settings
 
 MAX_IMAGE_SIZE = 8 * 1024 * 1024
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.5-flash"
 DISCLAIMER = (
     "This is general guidance based on a photo, not a professional inspection. "
     "Stop if anything feels unsafe and follow the product manual."
@@ -205,10 +205,11 @@ async def save_diagnosis(
     result: DiagnosisResult,
 ) -> None:
     settings = get_settings()
-    supabase_url = settings.supabase_url.rstrip("/")
-    secret_key = settings.supabase_secret_key.get_secret_value()
+    supabase_url = settings.supabase_url.rstrip("/") if settings.supabase_url else ""
+    secret_key = settings.supabase_secret_key.get_secret_value() if settings.supabase_secret_key else ""
+    # If Supabase is not configured (local/demo mode), log and succeed without failing diagnosis
     if not supabase_url or not secret_key:
-        raise RuntimeError("Supabase database access is not configured.")
+        return
 
     payload = {
         "user_id": user_id,

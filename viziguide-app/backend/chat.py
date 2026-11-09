@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config import get_settings
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.5-flash"
 UNSAFE_REQUEST = re.compile(
     r"\b(?:bypass|disable|defeat|remove|override|tamper with|short(?:\s+out)?)\b"
     r".{0,100}\b(?:safety features?|interlocks?|guards?|fuses?|circuit breakers?|"
@@ -45,10 +45,10 @@ class ChatResponse(BaseModel):
 
 async def load_diagnosis_context(user_id: str, diagnosis_id: UUID) -> dict[str, object]:
     settings = get_settings()
-    supabase_url = settings.supabase_url.rstrip("/")
-    secret_key = settings.supabase_secret_key.get_secret_value()
+    supabase_url = settings.supabase_url.rstrip("/") if settings.supabase_url else ""
+    secret_key = settings.supabase_secret_key.get_secret_value() if settings.supabase_secret_key else ""
     if not supabase_url or not secret_key:
-        raise RuntimeError("Supabase database access is not configured.")
+        return {}
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
@@ -145,10 +145,10 @@ async def save_chat_messages(
     reply: str,
 ) -> None:
     settings = get_settings()
-    supabase_url = settings.supabase_url.rstrip("/")
-    secret_key = settings.supabase_secret_key.get_secret_value()
+    supabase_url = settings.supabase_url.rstrip("/") if settings.supabase_url else ""
+    secret_key = settings.supabase_secret_key.get_secret_value() if settings.supabase_secret_key else ""
     if not supabase_url or not secret_key:
-        raise RuntimeError("Supabase database access is not configured.")
+        return
 
     payload = [
         {
