@@ -18,11 +18,14 @@ export interface ChatResponse {
 function cleanMarkdown(text: string): string {
   if (!text) return ''
   return text
-    .replace(/\*\*(.*?)\*\*/g, '$1') // Bold **text** -> text
-    .replace(/\*(.*?)\*/g, '$1')     // Italic *text* -> text
-    .replace(/_{1,2}(.*?)_{1,2}/g, '$1')
-    .replace(/`{1,3}(.*?)`{1,3}/g, '$1')
-    .replace(/#{1,6}\s*/g, '')
+    // Replace markdown headers and bullets
+    .replace(/^[\s#*-]+/gm, '')
+    // Remove all literal asterisks anywhere (single, double, triple)
+    .replace(/\*+/g, '')
+    // Remove markdown backticks, underlines, tildes
+    .replace(/[`_~]+/g, '')
+    // Clean up excessive whitespace
+    .replace(/[ \t]{2,}/g, ' ')
     .trim()
 }
 
@@ -63,20 +66,20 @@ export async function analyzeImage(file: File, description?: string): Promise<Di
     // Clean steps and strip markdown/asterisks
     const stepLines = rawFix
       .split('\n')
-      .map((l: string) => cleanMarkdown(l.replace(/^[-*#\d.]+\s*/, '')))
+      .map((l: string) => cleanMarkdown(l))
       .filter((l: string) => l.length > 5 && !l.toLowerCase().startsWith('phase '))
 
     // Clean warnings
     const warningLines = (s.safety_warnings || '')
       .split('\n')
-      .map((l: string) => cleanMarkdown(l.replace(/^[-*#\d.]+\s*/, '')))
+      .map((l: string) => cleanMarkdown(l))
       .filter((l: string) => l.length > 5)
 
     const rawProduct = (s.identified_product || raw.inputs?.product_hint || 'Identified Product').split('\n')[0]
     const rawIssue = s.likely_root_cause || s.root_cause || s.observed_symptoms || raw.diagnosis || 'Diagnosis completed'
 
     return {
-      productName: cleanMarkdown(rawProduct.replace(/^[-*#\d.]+\s*/, '')),
+      productName: cleanMarkdown(rawProduct),
       issue: cleanMarkdown(rawIssue).slice(0, 450),
       steps: stepLines.length > 0 ? stepLines : ['Refer to product manual or qualified technician for internal disassembly.'],
       warnings: warningLines.length > 0 ? warningLines : ['Always disconnect from mains AC power before inspecting internal parts.'],
