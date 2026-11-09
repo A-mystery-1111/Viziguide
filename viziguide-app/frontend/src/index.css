@@ -1493,8 +1493,8 @@ button {
 /* Diagnose and results */
 .diagnose-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(250px, .8fr);
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 1.3fr);
+    gap: 20px;
     align-items: start
 }
 
@@ -4198,7 +4198,10 @@ button {
 
 .repair-steps {
     display: grid;
-    gap: 8px
+    gap: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 6px;
 }
 
 .repair-steps> b {

@@ -388,6 +388,7 @@ async def record_feedback(feedback: FeedbackRequest):
 
 
 @app.post("/diagnose", response_model=DiagnosisResponse)
+@app.post("/api/diagnose", response_model=DiagnosisResponse)
 async def diagnose(
     images: Optional[List[UploadFile]] = File(None, description="One or more equipment photos"),
     image: Optional[UploadFile] = File(None, description="Single photo alias"),
@@ -589,6 +590,47 @@ async def diagnose(
         diagnosis=diagnosis_text,
         sections=parsed_sections,
     )
+
+
+class ChatPayload(BaseModel):
+    message: str
+    diagnosis_id: Optional[str] = None
+
+
+class ChatResult(BaseModel):
+    reply: str
+    conversation_id: str
+
+
+@app.post("/api/chat", response_model=ChatResult)
+async def api_chat(chat_in: ChatPayload):
+    """Chat endpoint using Gemini to advise on safe repairs."""
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
+    
+    system_instruction = (
+        "You are ViziGuide, a friendly, concise, and safety-first assistant for home electronics, "
+        "computers, and household appliances. Provide simple, direct troubleshooting steps. "
+        "Never instruct the user to bypass fuses, lid interlocks, or work on live mains electricity."
+    )
+    
+    try:
+        client = genai.Client(api_key=gemini_api_key)
+        response = client.models.generate_content(
+            model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+            contents=chat_in.message,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                temperature=0.3,
+            ),
+        )
+        reply = response.text if response and response.text else "I am ready to help. What appliance or device needs troubleshooting?"
+    except Exception as exc:
+        logger.error(f"Chat generation failed: {exc}")
+        reply = f"I am currently having trouble processing that request: {str(exc)}"
+
+    return ChatResult(reply=reply, conversation_id=str(uuid.uuid4()))
 
 
 # Mount Frontend statically if directory exists
