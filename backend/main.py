@@ -14,7 +14,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from PIL import Image
 from pydantic import BaseModel, Field
 
@@ -518,8 +519,8 @@ async def diagnose(
             "based strictly on reported symptoms, verified manual troubleshooting, and note clear visual inspection instructions."
         )
 
-    # 4. Generate diagnosis with Gemini (with transport='rest' and fallback candidate models)
-    genai.configure(api_key=gemini_api_key, transport="rest")
+    # 4. Generate diagnosis with Gemini (new google.genai SDK, with fallback candidate models)
+    client = genai.Client(api_key=gemini_api_key)
 
     candidate_models = [model_name]
     for fallback in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"]:
@@ -530,19 +531,31 @@ async def diagnose(
     used_model = model_name
     last_err = None
 
+    # Build content list: convert PIL Images to bytes for the new SDK
+    sdk_parts: List[Any] = []
+    for part in content_parts:
+        if isinstance(part, Image.Image):
+            buf = io.BytesIO()
+            part.save(buf, format="JPEG", quality=85)
+            sdk_parts.append(
+                genai_types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
+            )
+        else:
+            sdk_parts.append(str(part))
+
     for candidate in candidate_models:
         try:
             logger.info(f"Attempting diagnosis with Gemini model: {candidate}")
-            model = genai.GenerativeModel(
-                model_name=candidate,
-                system_instruction=TECHNICIAN_SYSTEM_PROMPT,
-                generation_config=genai.types.GenerationConfig(
+            response = client.models.generate_content(
+                model=candidate,
+                contents=sdk_parts,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=TECHNICIAN_SYSTEM_PROMPT,
                     temperature=0.2,
                     top_p=0.95,
                 ),
             )
-            response = model.generate_content(content_parts)
-            if response and hasattr(response, "text") and response.text:
+            if response and response.text:
                 used_model = candidate
                 logger.info(f"Successfully generated diagnosis with model: {used_model}")
                 break
@@ -551,7 +564,7 @@ async def diagnose(
             logger.warning(f"Model '{candidate}' failed: {candidate_err}. Trying next candidate...")
             continue
 
-    diagnosis_text = response.text if response and hasattr(response, "text") else ""
+    diagnosis_text = response.text if response and response.text else ""
 
     if not diagnosis_text:
         logger.error(f"All candidate Gemini models failed. Last error: {last_err}", exc_info=True)
