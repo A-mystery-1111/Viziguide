@@ -604,7 +604,7 @@ class ChatResult(BaseModel):
 
 @app.post("/api/chat", response_model=ChatResult)
 async def api_chat(chat_in: ChatPayload):
-    """Chat endpoint using Gemini to advise on safe repairs."""
+    """Chat endpoint using Gemini to advise on safe repairs with automatic fallback models."""
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     if not gemini_api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
@@ -612,23 +612,51 @@ async def api_chat(chat_in: ChatPayload):
     system_instruction = (
         "You are ViziGuide, a friendly, concise, and safety-first assistant for home electronics, "
         "computers, and household appliances. Provide simple, direct troubleshooting steps. "
-        "Never instruct the user to bypass fuses, lid interlocks, or work on live mains electricity."
+        "Never instruct the user to bypass fuses, lid interlocks, or work on live mains electricity. "
+        "Do not use markdown asterisks in your responses."
     )
     
-    try:
-        client = genai.Client(api_key=gemini_api_key)
-        response = client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
-            contents=chat_in.message,
-            config=genai_types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.3,
-            ),
+    client = genai.Client(api_key=gemini_api_key)
+    candidate_models = [
+        os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+        "gemini-3.5-flash-lite",
+        "gemini-flash-latest",
+        "gemini-3.8-flash",
+        "gemini-flash-lite-latest",
+    ]
+    # Remove duplicates preserving order
+    seen = set()
+    candidate_models = [m for m in candidate_models if not (m in seen or seen.add(m))]
+
+    reply = None
+    last_exc = None
+
+    for candidate in candidate_models:
+        try:
+            logger.info(f"Attempting chat with Gemini model: {candidate}")
+            response = client.models.generate_content(
+                model=candidate,
+                contents=chat_in.message,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.3,
+                ),
+            )
+            if response and response.text:
+                reply = response.text.replace("*", "").strip()
+                logger.info(f"Chat generation succeeded with {candidate}")
+                break
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(f"Chat failed on model '{candidate}': {exc}. Trying next fallback...")
+            continue
+
+    if not reply:
+        logger.error(f"All chat candidate models failed: {last_exc}")
+        reply = (
+            "I am having a brief connection delay due to high server demand. "
+            "Please try asking your question again in a moment."
         )
-        reply = response.text if response and response.text else "I am ready to help. What appliance or device needs troubleshooting?"
-    except Exception as exc:
-        logger.error(f"Chat generation failed: {exc}")
-        reply = f"I am currently having trouble processing that request: {str(exc)}"
 
     return ChatResult(reply=reply, conversation_id=str(uuid.uuid4()))
 
