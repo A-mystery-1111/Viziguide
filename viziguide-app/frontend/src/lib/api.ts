@@ -1,6 +1,19 @@
 import { supabase } from './supabase'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+const BACKEND_TUNNEL_URL = 'https://adequate-berkeley-toolbar-basin.trycloudflare.com'
+
+function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    // If accessing via the public tunnel, route API calls through the public backend tunnel!
+    if (host.includes('trycloudflare.com') || (!host.includes('localhost') && host !== '127.0.0.1')) {
+      return BACKEND_TUNNEL_URL
+    }
+  }
+  return import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+}
+
+const API_BASE = getApiBase()
 
 export interface DiagnosisResult {
   productName: string

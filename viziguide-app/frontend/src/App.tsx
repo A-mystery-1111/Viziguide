@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ChangeEvent, type Dra
 import {
     ArrowRight, Bell, BookOpen, CalendarDays, Camera, Check, ChevronDown,
     CircleHelp, Clock3, FileText, History, Home, ImagePlus, LifeBuoy, MapPin,
-    LogOut, MessageCircle, Plus, Search, Send, Settings2, ShieldCheck,
+    LogOut, MessageCircle, Plus, Search, Send, Settings2, Share2, ShieldCheck,
     Sparkles, Wrench, X,
 } from 'lucide-react'
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
@@ -19,6 +19,46 @@ const navItems = [
     { name: 'Professionals', path: '/app/professionals', Icon: LifeBuoy },
     { name: 'Reminders', path: '/app/reminders', Icon: CalendarDays },
 ]
+
+const PUBLIC_SHARE_URL = 'https://manufactured-beats-jade-identical.trycloudflare.com'
+
+function getShareUrl() {
+    if (typeof window !== 'undefined') {
+        const host = window.location.hostname
+        if (host.includes('trycloudflare.com') || (!host.includes('localhost') && host !== '127.0.0.1')) {
+            return window.location.origin
+        }
+    }
+    return PUBLIC_SHARE_URL
+}
+
+function ShareButton() {
+    const [copied, setCopied] = useState(false)
+    const handleShare = () => {
+        const shareUrl = getShareUrl()
+        const text = `🔧 Check out ViziGuide – Multimodal AI Hardware & Appliance Diagnostics!\n\n${shareUrl}`
+        if (navigator.share) {
+            navigator.share({ title: 'ViziGuide', text, url: shareUrl }).catch(() => {})
+        } else {
+            navigator.clipboard.writeText(shareUrl)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+        }
+    }
+
+    return (
+        <button
+            type="button"
+            className="button button-outline button-small share-nav-btn"
+            onClick={handleShare}
+            title="Share ViziGuide"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+        >
+            <Share2 size={14} />
+            <span>{copied ? 'Link Copied!' : 'Share Website'}</span>
+        </button>
+    )
+}
 
 function Brand() {
     return <Link to="/" className="brand"><span className="brand-mark"><Sparkles size={16} /></span><span>Vizi<span>Guide</span></span></Link>
@@ -108,7 +148,15 @@ function Shell({ children }: { children: React.ReactNode }) {
             <NavLink to="/app/profile" className={({ isActive }) => `account-link ${isActive ? 'active' : ''}`}><UserAvatar name={displayName} /><span><b>{displayName}</b></span><Settings2 size={16} /></NavLink>
         </aside>
         <div className="main-column">
-            <header className="topbar"><div className="breadcrumb"><span>My home</span><i>/</i><b>{title}</b></div><div className="top-actions"><label className="top-search"><Search size={15} /><input placeholder="Search your home" aria-label="Search your home" /><kbd>⌘ K</kbd></label><button className="icon-button notify" aria-label="Notifications" type="button"><Bell size={17} /></button><UserMenu compact /></div></header>
+            <header className="topbar">
+                <div className="breadcrumb"><span>My home</span><i>/</i><b>{title}</b></div>
+                <div className="top-actions">
+                    <label className="top-search"><Search size={15} /><input placeholder="Search your home" aria-label="Search your home" /><kbd>⌘ K</kbd></label>
+                    <ShareButton />
+                    <button className="icon-button notify" aria-label="Notifications" type="button"><Bell size={17} /></button>
+                    <UserMenu compact />
+                </div>
+            </header>
             <main className="page-content">{children}</main>
         </div>
     </div>
@@ -121,7 +169,14 @@ function Heading({ tag, title, detail, action }: { tag: string; title: string; d
 function Landing() {
     const { user } = useAuth()
     return <div className="landing">
-        <header className="landing-nav"><Brand /><nav><a href="#problem">Why ViziGuide</a><a href="#features">Features</a><a href="#how">How it works</a></nav><div>{user ? <UserMenu /> : <><Link to="/login" className="login-link">Log in</Link><Link to="/signup" className="button button-dark button-small">Sign up <ArrowRight size={14} /></Link></>}</div></header>
+        <header className="landing-nav">
+            <Brand />
+            <nav><a href="#problem">Why ViziGuide</a><a href="#features">Features</a><a href="#how">How it works</a></nav>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ShareButton />
+                {user ? <UserMenu /> : <><Link to="/login" className="login-link">Log in</Link><Link to="/signup" className="button button-dark button-small">Sign up <ArrowRight size={14} /></Link></>}
+            </div>
+        </header>
         <section className="landing-hero">
             <div className="landing-hero-copy"><span className="hero-pill"><i /> YOUR PERSONAL VISUAL ASSISTANT</span><h1>Understand any<br />product in <em>seconds.</em></h1><p>Snap a photo and turn confusing manuals into clear, visual steps. Fix it yourself, or find a trusted pro nearby.</p><div className="hero-actions"><Link to="/app/diagnose" className="button button-dark">Identify a product <Camera size={16} /></Link><a className="quiet-link" href="#how">See how it works <ArrowRight size={14} /></a></div><div className="hero-note"><span className="mini-avatars"><i>J</i><i>M</i><i>A</i></span><span><b>Made for the things you already own</b><small>Practical help, without the manual hunt.</small></span></div></div>
             <div className="landing-hero-art"><div className="landing-orbit orbit-outer" /><div className="landing-orbit orbit-inner" /><div className="product-scan-card"><div className="scan-card-top"><span><small>PRODUCT IDENTIFIED</small><b>Front-load washer</b></span><span className="scan-match"><Check size={12} /> 98% match</span></div><div className="scan-product"><div className="scan-washer"><i /><b /></div><span className="scan-focus"><Wrench size={13} /> Drain filter</span><i className="scan-corner corner-tl" /><i className="scan-corner corner-br" /></div><div className="scan-issue"><span><Sparkles size={15} /></span><div><b>Water isn’t draining?</b><small>We found a likely cause and a safe guide.</small></div><ArrowRight size={15} /></div><div className="scan-progress"><i /><i /><i /><i /><span>Step-by-step guide ready</span></div></div><div className="scan-float scan-float-top"><ShieldCheck size={15} /><span><b>Safety checked</b><small>Clear next steps</small></span></div><div className="scan-float scan-float-bottom"><Sparkles size={15} /><span><b>Manual, simplified</b><small>For your exact model</small></span></div></div>
