@@ -9,5 +9,8 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     allowedHosts: true,
+    proxy: {
+      '/api': 'http://127.0.0.1:8000',
+    },
   },
 })
