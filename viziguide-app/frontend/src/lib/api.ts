@@ -1,7 +1,6 @@
 import { supabase } from './supabase'
 
-// Same-origin relative requests; in development Vite proxies /api, and on Vercel the proxy function handles /api/...
-const API_BASE = ''
+const API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:8000' : ''
 
 export interface DiagnosisResult {
   productName: string
@@ -19,13 +18,9 @@ export interface ChatResponse {
 function cleanMarkdown(text: string): string {
   if (!text) return ''
   return text
-    // Replace markdown headers and bullets
     .replace(/^[\s#*-]+/gm, '')
-    // Remove all literal asterisks anywhere (single, double, triple)
     .replace(/\*+/g, '')
-    // Remove markdown backticks, underlines, tildes
     .replace(/[`_~]+/g, '')
-    // Clean up excessive whitespace
     .replace(/[ \t]{2,}/g, ' ')
     .trim()
 }
@@ -45,7 +40,6 @@ export async function analyzeImage(file: File, description?: string): Promise<Di
   }
 
   const headers = await getAuthHeader()
-
   const response = await fetch(`${API_BASE}/api/diagnose`, {
     method: 'POST',
     headers,
@@ -59,18 +53,14 @@ export async function analyzeImage(file: File, description?: string): Promise<Di
 
   const raw = await response.json()
 
-  // Handle backend/main.py (multimodal full response)
   if (raw.sections) {
     const s = raw.sections
     const rawFix = s.step_by_step_fix || ''
-    
-    // Clean steps and strip markdown/asterisks
     const stepLines = rawFix
       .split('\n')
       .map((l: string) => cleanMarkdown(l))
       .filter((l: string) => l.length > 5 && !l.toLowerCase().startsWith('phase '))
 
-    // Clean warnings
     const warningLines = (s.safety_warnings || '')
       .split('\n')
       .map((l: string) => cleanMarkdown(l))
@@ -89,7 +79,6 @@ export async function analyzeImage(file: File, description?: string): Promise<Di
     }
   }
 
-  // Handle direct DiagnosisResult format
   const rawIssue = cleanMarkdown(raw.issue || 'Diagnosis complete')
   const stepsList = Array.isArray(raw.steps)
     ? raw.steps.map((item: any) => cleanMarkdown(typeof item === 'string' ? item : `${item.title}: ${item.instruction}`))
