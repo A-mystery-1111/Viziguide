@@ -47,8 +47,18 @@ export async function analyzeImage(file: File, description?: string): Promise<Di
   })
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.detail || `Diagnosis request failed with status ${response.status}`)
+    let errorDetail = ''
+    try {
+      const errorData = await response.json()
+      errorDetail = errorData.detail || errorData.message || JSON.stringify(errorData)
+    } catch {
+      try {
+        errorDetail = await response.text()
+      } catch {
+        errorDetail = ''
+      }
+    }
+    throw new Error(errorDetail ? `Server error (${response.status}): ${errorDetail}` : `Diagnosis request failed with status ${response.status}`)
   }
 
   const raw = await response.json()

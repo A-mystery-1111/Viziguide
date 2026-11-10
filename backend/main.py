@@ -9,7 +9,11 @@ import tempfile
 import uuid
 from typing import Any, Dict, List, Optional
 
-import cv2
+try:
+    import cv2
+except Exception as cv2_err:
+    cv2 = None
+    logger.warning(f"OpenCV import failed: {cv2_err}. Video frame extraction will be disabled.")
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -218,6 +222,12 @@ def extract_frames_from_video(
     _, ext = os.path.splitext(filename_hint)
     if not ext or ext.lower() not in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"]:
         ext = ".mp4"
+
+    if cv2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenCV video processing is not available in this environment. Please upload photos instead."
+        )
 
     temp_video_path = None
     extracted_frames: List[Image.Image] = []
