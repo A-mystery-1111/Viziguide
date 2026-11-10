@@ -25,7 +25,7 @@
     {
       "source": "/api/(.*)",
       "destination": {
-        "service": "backend"
+        "service": "viziguide-app"
       }
     },
     {
