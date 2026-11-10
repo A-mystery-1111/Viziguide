@@ -20,16 +20,11 @@ const navItems = [
     { name: 'Reminders', path: '/app/reminders', Icon: CalendarDays },
 ]
 
-const PUBLIC_SHARE_URL = 'https://manufactured-beats-jade-identical.trycloudflare.com'
-
 function getShareUrl() {
     if (typeof window !== 'undefined') {
-        const host = window.location.hostname
-        if (host.includes('trycloudflare.com') || (!host.includes('localhost') && host !== '127.0.0.1')) {
-            return window.location.origin
-        }
+        return window.location.origin
     }
-    return PUBLIC_SHARE_URL
+    return ''
 }
 
 function ShareButton() {

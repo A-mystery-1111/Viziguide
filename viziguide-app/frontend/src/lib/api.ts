@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-const API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:8000' : ''
+const API_BASE = ''
 
 export interface DiagnosisResult {
   productName: string
