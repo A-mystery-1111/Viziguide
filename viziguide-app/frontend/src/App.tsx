@@ -38,7 +38,7 @@ function ShareButton() {
         const shareUrl = getShareUrl()
         const text = `🔧 Check out ViziGuide – Multimodal AI Hardware & Appliance Diagnostics!\n\n${shareUrl}`
         if (navigator.share) {
-            navigator.share({ title: 'ViziGuide', text, url: shareUrl }).catch(() => {})
+            navigator.share({ title: 'ViziGuide', text, url: shareUrl }).catch(() => { })
         } else {
             navigator.clipboard.writeText(shareUrl)
             setCopied(true)
@@ -142,7 +142,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <Brand />
             <div className="workspace"><span className="workspace-mark">V</span><span><b>My home</b><small>Personal workspace</small></span><ChevronDown size={14} /></div>
             <div className="side-label">WORKSPACE</div>
-            <nav className="side-nav" aria-label="Main navigation">{navItems.map(({ name, path, Icon }) =>             <NavLink key={path} to={path} end={path === '/app'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><Icon size={17} /><span>{name}</span>{name === 'Reminders' && <i className="nav-count">2</i>}</NavLink>)}</nav>
+            <nav className="side-nav" aria-label="Main navigation">{navItems.map(({ name, path, Icon }) => <NavLink key={path} to={path} end={path === '/app'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><Icon size={17} /><span>{name}</span>{name === 'Reminders' && <i className="nav-count">2</i>}</NavLink>)}</nav>
             <div className="sidebar-spacer" />
             <div className="help-card"><BookOpen size={17} /><b>Need a hand?</b><p>Find answers in the help center.</p><button type="button" className="text-link">Visit help center <ArrowRight size={13} /></button></div>
             <NavLink to="/app/profile" className={({ isActive }) => `account-link ${isActive ? 'active' : ''}`}><UserAvatar name={displayName} /><span><b>{displayName}</b></span><Settings2 size={16} /></NavLink>
@@ -379,7 +379,7 @@ function Reminders() {
     const upcoming = items.filter((item) => !item.done)
     return <><Heading tag="A LITTLE NUDGE, RIGHT ON TIME" title="Reminders" detail="Keep up with the small things that help your home run smoothly." action={<button className="button button-dark" type="button" onClick={() => setShowForm((open) => !open)}><Plus size={15} /> {showForm ? 'Cancel' : 'Add reminder'}</button>} />
         {showForm && <form className="panel reminder-form" onSubmit={addReminder}><label>Reminder title<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Clean the air filter" required /></label><label>Due date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label><label>Details<input value={detail} onChange={(event) => setDetail(event.target.value)} placeholder="Room or product (optional)" /></label><label>Type<select value={type} onChange={(event) => setType(event.target.value)}><option>Maintenance</option><option>Replacement</option><option>Safety</option><option>Other</option></select></label><button className="button button-dark" type="submit"><Plus size={15} /> Save reminder</button></form>}
-        <section className="panel reminder-list"><div className="list-label">UP NEXT <i>{upcoming.length}</i></div>{items.map((item) => { const formattedDate = new Date(`${item.date}T12:00:00`).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }).toUpperCase().split(' '); return <article className={`reminder-row ${item.done ? 'done' : ''}`} key={item.id}><button className="check-circle" type="button" aria-label={`${item.done ? 'Mark' : 'Complete'} ${item.title}`} onClick={() => toggleReminder(item.id)}>{item.done && <Check size={12} />}</button><span className="reminder-date">{formattedDate[1]}<small>{formattedDate[0]}</small></span><div><b>{item.title}</b><small>{item.detail}</small></div><i className="reminder-type">{item.type}</i></article>})}</section>
+        <section className="panel reminder-list"><div className="list-label">UP NEXT <i>{upcoming.length}</i></div>{items.map((item) => { const formattedDate = new Date(`${item.date}T12:00:00`).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }).toUpperCase().split(' '); return <article className={`reminder-row ${item.done ? 'done' : ''}`} key={item.id}><button className="check-circle" type="button" aria-label={`${item.done ? 'Mark' : 'Complete'} ${item.title}`} onClick={() => toggleReminder(item.id)}>{item.done && <Check size={12} />}</button><span className="reminder-date">{formattedDate[1]}<small>{formattedDate[0]}</small></span><div><b>{item.title}</b><small>{item.detail}</small></div><i className="reminder-type">{item.type}</i></article> })}</section>
         <div className="reminder-tip"><Clock3 size={18} /><span><b>Small upkeep can prevent bigger repairs.</b><small>Mock reminders are saved for this session.</small></span><CalendarDays size={26} /></div></>
 }
 
